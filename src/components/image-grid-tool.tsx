@@ -478,5 +478,6 @@ export const GridOverlay = () => {
         )}
       </div>
 
-      )
+    </div>
+  )
 }
