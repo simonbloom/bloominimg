@@ -24,9 +24,14 @@ export default function ImageGridTool() {
   const [opacitySteps, setOpacitySteps] = useState(0) // 0 = smooth, >0 = number of levels
   const [durationRange, setDurationRange] = useState([2, 4]) // Min/Max duration in seconds
   const [showDots, setShowDots] = useState(false)
-  const [isAnimated, setIsAnimated] = useState(true)
   const [gridColor, setGridColor] = useState('#000000')
   const [dotsColor, setDotsColor] = useState('#ffffff')
+
+  // Masking state
+  const [maskedIndices, setMaskedIndices] = useState<Set<number>>(new Set())
+  const [isMaskingMode, setIsMaskingMode] = useState(false)
+
+  const [isAnimated, setIsAnimated] = useState(true)
   const [seed, setSeed] = useState(0)
 
   // Calculate rows/cols based on aspect ratio approx, or just strict grid
@@ -75,7 +80,21 @@ export default function ImageGridTool() {
         setImage(url)
       }
       img.src = url
+      // Clear mask on new image to match new dimensions
+      setMaskedIndices(new Set())
     }
+  }
+
+  const toggleMask = (index: number) => {
+    setMaskedIndices(prev => {
+      const next = new Set(prev)
+      if (next.has(index)) {
+        next.delete(index)
+      } else {
+        next.add(index)
+      }
+      return next
+    })
   }
 
   const handleExportSVG = () => {
@@ -86,6 +105,9 @@ export default function ImageGridTool() {
     const cellHeight = 100 / rows
 
     let svgBody = gridCells.map((cell, i) => {
+      // Skip masked cells
+      if (maskedIndices.has(i)) return ''
+
       const r = Math.floor(i / cols)
       const c = i % cols
       return `<rect x="${c * cellWidth}%" y="${r * cellHeight}%" width="${cellWidth}%" height="${cellHeight}%" fill="${gridColor}" fill-opacity="${cell.opacity.toFixed(3)}" />`
@@ -119,6 +141,9 @@ export default function ImageGridTool() {
   }
 
   const handleCopyCode = () => {
+    // We need to pass the masked indices to the code
+    const maskedArrayStr = JSON.stringify(Array.from(maskedIndices));
+
     const code = `
 import { motion } from 'framer-motion';
 
@@ -127,6 +152,7 @@ export const GridOverlay = () => {
   const cols = ${cols};
   const showDots = ${showDots};
   const dotsColor = '${dotsColor}';
+  const maskedIndices = new Set(${maskedArrayStr});
   
   // This is a simplified version. For exact opacity mapping, you'd export the data array.
   // Here we regenerate random values for a dynamic effect.
@@ -141,20 +167,24 @@ export const GridOverlay = () => {
             gridTemplateRows: \`repeat(\${rows}, 1fr)\`
         }}
       >
-        {Array.from({ length: rows * cols }).map((_, i) => (
-          <motion.div
-            key={i}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: Math.random() * (${opacityRange[1]} - ${opacityRange[0]}) + ${opacityRange[0]} }}
-            transition={{ 
-                duration: Math.random() * (${durationRange[1]} - ${durationRange[0]}) + ${durationRange[0]}, 
-                repeat: Infinity, 
-                repeatType: 'reverse', 
-                delay: i * 0.01 
-            }}
-            style={{ backgroundColor: '${gridColor}' }}
-          />
-        ))}
+        {Array.from({ length: rows * cols }).map((_, i) => {
+          if (maskedIndices.has(i)) return <div key={i} />; // Render empty div to maintain grid layout
+
+          return (
+            <motion.div
+                key={i}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: Math.random() * (${opacityRange[1]} - ${opacityRange[0]}) + ${opacityRange[0]} }}
+                transition={{ 
+                    duration: Math.random() * (${durationRange[1]} - ${durationRange[0]}) + ${durationRange[0]}, 
+                    repeat: Infinity, 
+                    repeatType: 'reverse', 
+                    delay: i * 0.01 
+                }}
+                style={{ backgroundColor: '${gridColor}' }}
+            />
+          );
+        })}
       </div>
 
       {/* Dots Overlay */}
@@ -264,6 +294,22 @@ export const GridOverlay = () => {
             />
           </div>
 
+          {/* Masking Mode */}
+          <div className="space-y-4 p-4 rounded-lg bg-zinc-50 dark:bg-zinc-800 border">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="mask-toggle">Edit Mask (Hide Squares)</Label>
+              <Switch id="mask-toggle" checked={isMaskingMode} onCheckedChange={setIsMaskingMode} />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              When enabled, click on grid squares to turn them off (hide).
+            </p>
+            {maskedIndices.size > 0 && (
+              <Button variant="outline" size="sm" onClick={() => setMaskedIndices(new Set())} className="w-full mt-2">
+                Clear Mask ({maskedIndices.size} hidden)
+              </Button>
+            )}
+          </div>
+
           {/* Corner Dots */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -359,27 +405,53 @@ export const GridOverlay = () => {
                 gridTemplateRows: `repeat(${rows}, 1fr)`
               }}
             >
-              {gridCells.map((cell) => (
-                <motion.div
-                  key={cell.id}
-                  initial={{ opacity: cell.opacity }}
-                  animate={isAnimated ? {
-                    opacity: [cell.opacity, cell.opacity * 0.5, cell.opacity], // Simple shimmer
-                  } : { opacity: cell.opacity }}
-                  transition={{
-                    // Random duration between range
-                    duration: Math.random() * (durationRange[1] - durationRange[0]) + durationRange[0],
-                    repeat: Infinity,
-                    repeatType: "reverse",
-                    ease: "easeInOut",
-                    delay: Math.random() * 2
-                  }}
-                  style={{
-                    backgroundColor: gridColor,
-                    opacity: isAnimated ? undefined : cell.opacity // static fallback
-                  }}
-                />
-              ))}
+              {gridCells.map((cell, i) => {
+                const isMasked = maskedIndices.has(i)
+                const shouldAnimate = isAnimated && !isMasked
+
+                // Determine opacity target
+                // If masked:
+                //   - If Editing: 0.3 (so user can see it exists)
+                //   - If Not Editing: 0 (completely hidden)
+                // If not masked:
+                //   - If Animating: handled by keyframes
+                //   - If Static: cell.opacity
+                let staticOpacity = cell.opacity
+                if (isMasked) {
+                  staticOpacity = isMaskingMode ? 0.3 : 0
+                }
+
+                return (
+                  <motion.div
+                    key={cell.id}
+                    onClick={() => isMaskingMode && toggleMask(i)}
+                    initial={false}
+                    animate={shouldAnimate ? {
+                      opacity: [cell.opacity, cell.opacity * 0.5, cell.opacity],
+                    } : {
+                      opacity: staticOpacity
+                    }}
+                    transition={shouldAnimate ? {
+                      duration: Math.random() * (durationRange[1] - durationRange[0]) + durationRange[0],
+                      repeat: Infinity,
+                      repeatType: "reverse",
+                      ease: "easeInOut",
+                      delay: Math.random() * 2
+                    } : { duration: 0.3 }} // Simple transition when toggling states
+                    className={cn(
+                      "transition-colors duration-200",
+                      isMaskingMode && "cursor-pointer hover:z-10",
+                      isMaskingMode && !isMasked && "hover:ring-1 hover:ring-red-500", // Hover effect on active cells
+                      isMasked && isMaskingMode && "bg-red-500 ring-1 ring-red-500" // Visual cue for masked cells in edit mode
+                    )}
+                    style={{
+                      // If masked and editing, override color to red via class, or use style here if class fails
+                      // We use transparency in class/style to show it's "off"
+                      backgroundColor: isMasked && isMaskingMode ? undefined : gridColor,
+                    }}
+                  />
+                )
+              })}
             </div>
 
             {/* Dots Overlay */}
@@ -405,6 +477,6 @@ export const GridOverlay = () => {
           </div>
         )}
       </div>
-    </div>
-  )
+
+      )
 }
