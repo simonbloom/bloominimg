@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { Upload, Download, Copy, RefreshCw, Grid3X3, Sliders, Image as ImageIcon } from 'lucide-react'
+import { Upload, Download, Copy, RefreshCw, Grid3X3, Sliders, Image as ImageIcon, Package } from 'lucide-react'
 import { Slider } from '@/components/ui/slider'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -10,22 +10,25 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
+import JSZip from 'jszip'
 
 interface GridCell {
   id: string
   opacity: number
+  duration: number
+  delay: number
 }
 
 export default function ImageGridTool() {
   const [image, setImage] = useState<string | null>(null)
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 })
-  const [gridSize, setGridSize] = useState([20]) // Density (used for both if square)
-  const [opacityRange, setOpacityRange] = useState([0.1, 0.9])
-  const [opacitySteps, setOpacitySteps] = useState(0) // 0 = smooth, >0 = number of levels
-  const [durationRange, setDurationRange] = useState([2, 4]) // Min/Max duration in seconds
-  const [showDots, setShowDots] = useState(false)
-  const [gridColor, setGridColor] = useState('#000000')
-  const [dotsColor, setDotsColor] = useState('#ffffff')
+  const [gridSize, setGridSize] = useState([10]) // Density (used for both if square)
+  const [opacityRange, setOpacityRange] = useState([0.2, 0.9])
+  const [opacitySteps, setOpacitySteps] = useState(3) // 0 = smooth, >0 = number of levels
+  const [durationRange, setDurationRange] = useState([3.1, 10]) // Min/Max duration in seconds
+  const [showDots, setShowDots] = useState(true)
+  const [gridColor, setGridColor] = useState('#faf9f7')
+  const [dotsColor, setDotsColor] = useState('#c9c9c9')
 
   // Masking state
   const [maskedIndices, setMaskedIndices] = useState<Set<number>>(new Set())
@@ -33,6 +36,7 @@ export default function ImageGridTool() {
 
   const [isAnimated, setIsAnimated] = useState(true)
   const [seed, setSeed] = useState(0)
+  const [blendMode, setBlendMode] = useState<'normal' | 'multiply'>('multiply')
 
   // Calculate rows/cols based on aspect ratio approx, or just strict grid
   // We'll use a fixed number of columns and calculate rows to keep squares square-ish
@@ -60,13 +64,22 @@ export default function ImageGridTool() {
         opacity = opacityRange[0] + stepIndex * stepSize
       }
 
+      // Calculate random duration and delay using seeded random as well to keep it stable
+      const r2 = rng(i + 10000)
+      const duration = r2 * (durationRange[1] - durationRange[0]) + durationRange[0]
+
+      const r3 = rng(i + 20000)
+      const delay = r3 * 2
+
       cells.push({
         id: `cell-${i}`,
-        opacity
+        opacity,
+        duration,
+        delay
       })
     }
     return cells
-  }, [rows, cols, opacityRange, seed, aspectRatio, opacitySteps])
+  }, [rows, cols, opacityRange, seed, aspectRatio, opacitySteps, durationRange])
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -110,7 +123,7 @@ export default function ImageGridTool() {
 
       const r = Math.floor(i / cols)
       const c = i % cols
-      return `<rect x="${c * cellWidth}%" y="${r * cellHeight}%" width="${cellWidth}%" height="${cellHeight}%" fill="${gridColor}" fill-opacity="${cell.opacity.toFixed(3)}" />`
+      return `< rect x = "${c * cellWidth}%" y = "${r * cellHeight}%" width = "${cellWidth}%" height = "${cellHeight}%" fill = "${gridColor}" fill - opacity="${cell.opacity.toFixed(3)}" /> `
     }).join('\n')
 
     if (showDots) {
@@ -118,17 +131,17 @@ export default function ImageGridTool() {
       // Create dots at vertices. rows+1 vertical lines, cols+1 horizontal lines
       for (let r = 0; r <= rows; r++) {
         for (let c = 0; c <= cols; c++) {
-          dots.push(`<circle cx="${c * cellWidth}%" cy="${r * cellHeight}%" r="2" fill="${dotsColor}" />`)
+          dots.push(`< circle cx = "${c * cellWidth}%" cy = "${r * cellHeight}%" r = "2" fill = "${dotsColor}" /> `)
         }
       }
       svgBody += '\n' + dots.join('\n')
     }
 
     const svgContent = `
-<svg viewBox="0 0 ${dimensions.width} ${dimensions.height}" xmlns="http://www.w3.org/2000/svg">
-  <!-- Background Image Reference (Optional, typically used as overlay) -->
+  < svg viewBox = "0 0 ${dimensions.width} ${dimensions.height}" xmlns = "http://www.w3.org/2000/svg" >
+  < !--Background Image Reference(Optional, typically used as overlay)-- >
   ${svgBody}
-</svg>`.trim()
+</svg > `.trim()
 
     const blob = new Blob([svgContent], { type: 'image/svg+xml' })
     const url = URL.createObjectURL(blob)
@@ -140,77 +153,187 @@ export default function ImageGridTool() {
     document.body.removeChild(a)
   }
 
-  const handleCopyCode = () => {
-    // We need to pass the masked indices to the code
+  const generateComponentCode = () => {
     const maskedArrayStr = JSON.stringify(Array.from(maskedIndices));
+    const quantizeCode = opacitySteps > 1
+      ? `
+        const stepSize = (${opacityRange[1]} - ${opacityRange[0]}) / (${opacitySteps} - 1);
+        const stepIndex = Math.round((opacity - ${opacityRange[0]}) / stepSize);
+        opacity = ${opacityRange[0]} + stepIndex * stepSize;`
+      : '';
 
-    const code = `
+    return `import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
+// Note: Ensure you have 'framer-motion' installed: bun add framer-motion
 
 export const GridOverlay = () => {
   const rows = ${rows};
   const cols = ${cols};
   const showDots = ${showDots};
   const dotsColor = '${dotsColor}';
+  const gridColor = '${gridColor}';
+  const isAnimated = ${isAnimated};
   const maskedIndices = new Set(${maskedArrayStr});
-  
-  // This is a simplified version. For exact opacity mapping, you'd export the data array.
-  // Here we regenerate random values for a dynamic effect.
-  
+
+  // Generate grid cells once to maintain stable random values
+  const gridCells = useMemo(() => {
+    const cells = [];
+    for (let i = 0; i < rows * cols; i++) {
+      let opacity = Math.random() * (${opacityRange[1]} - ${opacityRange[0]}) + ${opacityRange[0]};${quantizeCode}
+      const duration = Math.random() * (${durationRange[1]} - ${durationRange[0]}) + ${durationRange[0]};
+      const delay = Math.random() * 2;
+      cells.push({ id: i, opacity, duration, delay });
+    }
+    return cells;
+  }, []);
+
   return (
-    <div className="relative w-full h-full" style={{ aspectRatio: '${dimensions.width}/${dimensions.height}' }}>
-      {/* Grid */}
-      <div 
+    <div className="relative w-full h-full max-w-4xl mx-auto overflow-hidden rounded-lg shadow-2xl" style={{ aspectRatio: '${dimensions.width}/${dimensions.height}' }}>
+      <img 
+        src="./background.png" 
+        alt="Background" 
+        className="absolute inset-0 w-full h-full object-cover"
+        style={{ mixBlendMode: '${blendMode}' }} 
+      />
+
+      <div
         className="absolute inset-0 grid"
         style={{
-            gridTemplateColumns: \`repeat(\${cols}, 1fr)\`,
-            gridTemplateRows: \`repeat(\${rows}, 1fr)\`
+          gridTemplateColumns: \`repeat(\${cols}, 1fr)\`,
+          gridTemplateRows: \`repeat(\${rows}, 1fr)\`
         }}
       >
-        {Array.from({ length: rows * cols }).map((_, i) => {
-          if (maskedIndices.has(i)) return <div key={i} />; // Render empty div to maintain grid layout
-
+        {gridCells.map((cell) => {
+          if (maskedIndices.has(cell.id)) return <div key={cell.id} />;
           return (
             <motion.div
-                key={i}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: Math.random() * (${opacityRange[1]} - ${opacityRange[0]}) + ${opacityRange[0]} }}
-                transition={{ 
-                    duration: Math.random() * (${durationRange[1]} - ${durationRange[0]}) + ${durationRange[0]}, 
-                    repeat: Infinity, 
-                    repeatType: 'reverse', 
-                    delay: i * 0.01 
-                }}
-                style={{ backgroundColor: '${gridColor}' }}
+              key={cell.id}
+              initial={{ opacity: cell.opacity }}
+              animate={isAnimated ? { 
+                opacity: [cell.opacity, cell.opacity * 0.5, cell.opacity] 
+              } : { opacity: cell.opacity }}
+              transition={isAnimated ? { 
+                duration: cell.duration, 
+                repeat: Infinity, 
+                repeatType: 'reverse',
+                ease: "easeInOut", 
+                delay: cell.delay 
+              } : { duration: 0 }}
+              style={{ backgroundColor: gridColor }}
             />
           );
         })}
       </div>
 
-      {/* Dots Overlay */}
       {showDots && (
         <svg className="absolute inset-0 w-full h-full pointer-events-none">
-            {Array.from({ length: (rows + 1) * (cols + 1) }).map((_, i) => {
-                const r = Math.floor(i / (cols + 1));
-                const c = i % (cols + 1);
-                return (
-                    <circle 
-                        key={i} 
-                        cx={\`\${(c / cols) * 100}%\`} 
-                        cy={\`\${(r / rows) * 100}%\`} 
-                        r="2" 
-                        fill="${dotsColor}" 
-                    />
-                );
-            })}
+          {Array.from({ length: (rows + 1) * (cols + 1) }).map((_, i) => {
+            const r = Math.floor(i / (cols + 1));
+            const c = i % (cols + 1);
+            return (
+              <circle 
+                key={i} 
+                cx={\`\${(c / cols) * 100}%\`} 
+                cy={\`\${(r / rows) * 100}%\`} 
+                r="1" 
+                fill="${dotsColor}" 
+              />
+            );
+          })}
         </svg>
       )}
     </div>
   );
 };
-    `
+`
+  }
+
+  const handleCopyCode = () => {
+    const code = generateComponentCode()
     navigator.clipboard.writeText(code)
     alert('React component code copied to clipboard!')
+  }
+
+  const handleDownloadPackage = async () => {
+    if (!image) return;
+
+    const zip = new JSZip();
+
+    const componentCode = generateComponentCode();
+
+    // 1. Add React Component
+    zip.file("GridOverlay.tsx", componentCode);
+
+    // 2. Add "Perfect Prompt" for LLM
+    const promptContent = `# Task: Implement Grid Overlay Component
+
+I need you to add a new visual component to my Next.js project. I have attached the necessary code and assets.
+
+## 1. Assets
+- I have included an image named \`background.png\` in this zip.
+- **Action**: Please move \`background.png\` to my project's \`public/\` folder.
+
+## 2. Dependencies
+- This component requires **Framer Motion**.
+- **Action**: Run \`bun add framer-motion\` or \`npm install framer-motion\`.
+
+## 3. The Component Code
+Create a new file at \`src/components/GridOverlay.tsx\` (or your preferred components directory) and paste the following code exactly. The code works "out of the box" provided the image is in the right place.
+
+\`\`\`tsx
+${componentCode}
+\`\`\`
+
+## 4. Usage & Styling Requirements (CRITICAL)
+- **Positioning**: The component is designed to fill its container (\`absolute inset-0\`). 
+- **Container**: You MUST ensure the parent container has \`relative\` positioning.
+- **Z-Index**: 
+    - The overlay should act as a background. 
+    - Ensure your main content has a higher z-index (e.g., \`z-10\`) so it sits *on top* of this grid.
+    - If placing this as a full-page background, you might need \`-z-10\` on the overlay or \`z-0\` on the container.
+
+### Example Implementation
+\`\`\`tsx
+import { GridOverlay } from '@/components/GridOverlay';
+
+export default function Page() {
+  return (
+    <div className="relative min-h-screen w-full overflow-hidden bg-black">
+      {/* The Grid Overlay sits behind everything */}
+      <GridOverlay />
+      
+      {/* Main Content sits on top */}
+      <main className="relative z-10 flex flex-col items-center justify-center min-h-screen text-white">
+        <h1 className="text-4xl font-bold">Welcome to the Future</h1>
+      </main>
+    </div>
+  )
+}
+\`\`\`
+
+Please implement this structure now.
+`
+    zip.file("LLM_PROMPT.md", promptContent);
+
+    // 3. Add Image
+    try {
+      const response = await fetch(image);
+      const blob = await response.blob();
+      zip.file("background.png", blob);
+    } catch (err) {
+      console.error("Failed to add image to zip", err);
+      alert("Warning: Could not add image to zip.");
+    }
+
+    // Generate and Download
+    const content = await zip.generateAsync({ type: "blob" });
+    const url = URL.createObjectURL(content);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "grid-overlay-package.zip";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   }
 
   return (
@@ -332,6 +455,21 @@ export const GridOverlay = () => {
             )}
           </div>
 
+          {/* Image Blend Mode */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="blend-toggle">Multiply Image Mode</Label>
+              <Switch
+                id="blend-toggle"
+                checked={blendMode === 'multiply'}
+                onCheckedChange={(c) => setBlendMode(c ? 'multiply' : 'normal')}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Sets image blend mode to 'multiply'. Effective when overlaying on colors.
+            </p>
+          </div>
+
           {/* Color */}
           <div className="space-y-4">
             <Label>Grid Color</Label>
@@ -364,10 +502,16 @@ export const GridOverlay = () => {
               <Download className="w-4 h-4 mr-2" />
               Download SVG
             </Button>
-            <Button variant="secondary" className="w-full" onClick={handleCopyCode} disabled={!image}>
-              <Copy className="w-4 h-4 mr-2" />
-              Copy React Component
-            </Button>
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="secondary" className="w-full" onClick={handleCopyCode} disabled={!image}>
+                <Copy className="w-4 h-4 mr-2" />
+                Copy Code
+              </Button>
+              <Button variant="default" className="w-full" onClick={handleDownloadPackage} disabled={!image}>
+                <Package className="w-4 h-4 mr-2" />
+                Download Package
+              </Button>
+            </div>
           </div>
 
         </CardContent>
@@ -394,6 +538,7 @@ export const GridOverlay = () => {
               src={image}
               alt="Preview"
               className="w-full h-full object-cover block"
+              style={{ mixBlendMode: blendMode }}
             />
 
             {/* Grid Overlay */}
@@ -432,11 +577,11 @@ export const GridOverlay = () => {
                       opacity: staticOpacity
                     }}
                     transition={shouldAnimate ? {
-                      duration: Math.random() * (durationRange[1] - durationRange[0]) + durationRange[0],
+                      duration: cell.duration,
                       repeat: Infinity,
                       repeatType: "reverse",
                       ease: "easeInOut",
-                      delay: Math.random() * 2
+                      delay: cell.delay
                     } : { duration: 0.3 }} // Simple transition when toggling states
                     className={cn(
                       "transition-colors duration-200",
@@ -466,7 +611,7 @@ export const GridOverlay = () => {
                         key={i}
                         cx={`${(c / cols) * 100}%`}
                         cy={`${(r / rows) * 100}%`}
-                        r="2"
+                        r="1"
                         fill={dotsColor}
                       />
                     )
