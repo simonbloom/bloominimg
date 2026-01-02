@@ -29,14 +29,28 @@ export default function ImageGridTool() {
   const [showDots, setShowDots] = useState(true)
   const [gridColor, setGridColor] = useState('#faf9f7')
   const [dotsColor, setDotsColor] = useState('#c9c9c9')
+  const [dotsSize, setDotsSize] = useState(1)
+  const [showStroke, setShowStroke] = useState(false)
+  const [strokeColor, setStrokeColor] = useState('#000000')
+  const [strokeWidth, setStrokeWidth] = useState(1)
+  const [strokeOpacityMultiplier, setStrokeOpacityMultiplier] = useState(1.5)
 
   // Masking state
   const [maskedIndices, setMaskedIndices] = useState<Set<number>>(new Set())
   const [isMaskingMode, setIsMaskingMode] = useState(false)
 
-  const [isAnimated, setIsAnimated] = useState(true)
+  const [isAnimated, setIsAnimated] = useState(false)
   const [seed, setSeed] = useState(0)
   const [blendMode, setBlendMode] = useState<'normal' | 'multiply'>('multiply')
+
+  useEffect(() => {
+    const img = new Image()
+    img.onload = () => {
+      setDimensions({ width: img.width, height: img.height })
+      setImage('/default-image.png')
+    }
+    img.src = '/default-image.png'
+  }, [])
 
   // Calculate rows/cols based on aspect ratio approx, or just strict grid
   // We'll use a fixed number of columns and calculate rows to keep squares square-ish
@@ -171,7 +185,12 @@ export const GridOverlay = () => {
   const cols = ${cols};
   const showDots = ${showDots};
   const dotsColor = '${dotsColor}';
+  const dotsSize = ${dotsSize};
   const gridColor = '${gridColor}';
+  const showStroke = ${showStroke};
+  const strokeColor = '${strokeColor}';
+  const strokeWidth = ${strokeWidth};
+  const strokeOpacityMultiplier = ${strokeOpacityMultiplier};
   const isAnimated = ${isAnimated};
   const maskedIndices = new Set(${maskedArrayStr});
 
@@ -219,7 +238,10 @@ export const GridOverlay = () => {
                 ease: "easeInOut", 
                 delay: cell.delay 
               } : { duration: 0 }}
-              style={{ backgroundColor: gridColor }}
+              style={{ 
+                backgroundColor: gridColor,
+                boxShadow: showStroke ? \`inset 0 0 0 \${strokeWidth}px rgba(\${parseInt(strokeColor.slice(1, 3), 16)}, \${parseInt(strokeColor.slice(3, 5), 16)}, \${parseInt(strokeColor.slice(5, 7), 16)}, \${Math.min(1, cell.opacity * strokeOpacityMultiplier)})\` : undefined
+              }}
             />
           );
         })}
@@ -235,7 +257,7 @@ export const GridOverlay = () => {
                 key={i} 
                 cx={\`\${(c / cols) * 100}%\`} 
                 cy={\`\${(r / rows) * 100}%\`} 
-                r="1" 
+                r={dotsSize} 
                 fill="${dotsColor}" 
               />
             );
@@ -451,6 +473,14 @@ Please implement this structure now.
                   />
                   <span className="text-sm font-mono text-muted-foreground">{dotsColor}</span>
                 </div>
+                <Label>Dots Size ({dotsSize})</Label>
+                <Slider
+                  value={[dotsSize]}
+                  onValueChange={(vals) => setDotsSize(vals[0])}
+                  min={0.5}
+                  max={5}
+                  step={0.5}
+                />
               </div>
             )}
           </div>
@@ -482,6 +512,53 @@ Please implement this structure now.
               />
               <span className="text-sm font-mono text-muted-foreground">{gridColor}</span>
             </div>
+          </div>
+
+          {/* Box Stroke */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="stroke-toggle">Show Box Stroke</Label>
+              <Switch id="stroke-toggle" checked={showStroke} onCheckedChange={setShowStroke} />
+            </div>
+            {showStroke && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Stroke Color</Label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={strokeColor}
+                      onChange={(e) => setStrokeColor(e.target.value)}
+                      className="w-10 h-10 rounded border cursor-pointer"
+                    />
+                    <span className="text-sm font-mono text-muted-foreground">{strokeColor}</span>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Stroke Width ({strokeWidth}px)</Label>
+                  <Slider
+                    value={[strokeWidth]}
+                    onValueChange={(vals) => setStrokeWidth(vals[0])}
+                    min={0.5}
+                    max={5}
+                    step={0.5}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Stroke Opacity Multiplier ({strokeOpacityMultiplier}x)</Label>
+                  <Slider
+                    value={[strokeOpacityMultiplier]}
+                    onValueChange={(vals) => setStrokeOpacityMultiplier(vals[0])}
+                    min={0.5}
+                    max={3}
+                    step={0.1}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Stroke opacity = fill opacity × multiplier (capped at 1.0)
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Preview Settings */}
@@ -568,7 +645,7 @@ Please implement this structure now.
 
                 return (
                   <motion.div
-                    key={cell.id}
+                    key={`${cell.id}-${durationRange[0]}-${durationRange[1]}-${isAnimated}`}
                     onClick={() => isMaskingMode && toggleMask(i)}
                     initial={false}
                     animate={shouldAnimate ? {
@@ -590,9 +667,10 @@ Please implement this structure now.
                       isMasked && isMaskingMode && "bg-red-500 ring-1 ring-red-500" // Visual cue for masked cells in edit mode
                     )}
                     style={{
-                      // If masked and editing, override color to red via class, or use style here if class fails
-                      // We use transparency in class/style to show it's "off"
                       backgroundColor: isMasked && isMaskingMode ? undefined : gridColor,
+                      boxShadow: showStroke && !isMasked
+                        ? `inset 0 0 0 ${strokeWidth}px rgba(${parseInt(strokeColor.slice(1, 3), 16)}, ${parseInt(strokeColor.slice(3, 5), 16)}, ${parseInt(strokeColor.slice(5, 7), 16)}, ${Math.min(1, cell.opacity * strokeOpacityMultiplier)})`
+                        : undefined
                     }}
                   />
                 )
@@ -611,7 +689,7 @@ Please implement this structure now.
                         key={i}
                         cx={`${(c / cols) * 100}%`}
                         cy={`${(r / rows) * 100}%`}
-                        r="1"
+                        r={dotsSize}
                         fill={dotsColor}
                       />
                     )
