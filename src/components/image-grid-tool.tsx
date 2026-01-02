@@ -1,8 +1,8 @@
 "use client"
 
 import React, { useState, useRef, useEffect, useMemo } from 'react'
-import { motion } from 'framer-motion'
-import { Upload, Download, Copy, RefreshCw, Grid3X3, Sliders, Image as ImageIcon, Package } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Upload, Download, Copy, RefreshCw, Grid3X3, Sliders, Image as ImageIcon, Package, ChevronDown } from 'lucide-react'
 import { Slider } from '@/components/ui/slider'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -17,6 +17,52 @@ interface GridCell {
   opacity: number
   duration: number
   delay: number
+}
+
+interface SectionProps {
+  title: string
+  children: React.ReactNode
+  toggle?: { checked: boolean; onCheckedChange: (v: boolean) => void }
+  defaultOpen?: boolean
+}
+
+function Section({ title, children, toggle, defaultOpen = true }: SectionProps) {
+  const [isOpen, setIsOpen] = useState(defaultOpen)
+  const showContent = toggle ? toggle.checked && isOpen : isOpen
+
+  return (
+    <div className="border-t border-border">
+      <div className="flex w-full items-center justify-between py-3">
+        <button
+          type="button"
+          className="flex-1 flex items-center gap-2 text-left hover:text-foreground/80 transition-colors"
+          onClick={() => setIsOpen(!isOpen)}
+        >
+          <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", isOpen && "rotate-180")} />
+          <span className="text-sm font-medium">{title}</span>
+        </button>
+        {toggle && (
+          <Switch
+            checked={toggle.checked}
+            onCheckedChange={toggle.onCheckedChange}
+          />
+        )}
+      </div>
+      <AnimatePresence initial={false}>
+        {showContent && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="pb-4 space-y-3">{children}</div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
 }
 
 export default function ImageGridTool() {
@@ -359,243 +405,160 @@ Please implement this structure now.
   }
 
   return (
-    <div className="flex flex-col lg:flex-row h-[calc(100vh-4rem)] gap-6 p-6">
+    <div className="flex flex-col lg:flex-row h-screen gap-6 p-6">
       {/* Sidebar Controls */}
       <Card className="w-full lg:w-80 flex-shrink-0 overflow-y-auto">
-        <CardContent className="p-6 space-y-8">
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight mb-2">Settings</h2>
-            <p className="text-muted-foreground text-sm">Customize your vector grid.</p>
-          </div>
-
-          {/* Upload */}
-          <div className="space-y-4">
-            <Label htmlFor="image-upload" className="block text-sm font-medium">Base Image</Label>
-            <div className="flex items-center gap-2">
-              <Input id="image-upload" type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
-              <Button variant="outline" className="w-full" onClick={() => document.getElementById('image-upload')?.click()}>
-                <Upload className="w-4 h-4 mr-2" />
-                {image ? 'Change Image' : 'Upload Image'}
-              </Button>
-            </div>
-          </div>
-
-          {/* Grid Density */}
-          <div className="space-y-4">
-            <div className="flex justify-between">
-              <Label>Grid Density (Cols: {cols})</Label>
-            </div>
-            <Slider
-              value={gridSize}
-              onValueChange={setGridSize}
-              min={5}
-              max={100}
-              step={1}
-            />
-          </div>
-
-          {/* Opacity Range */}
-          <div className="space-y-4">
-            <div className="flex justify-between">
-              <Label>Opacity Range ({opacityRange[0]} - {opacityRange[1]})</Label>
-            </div>
-            <Slider
-              value={opacityRange}
-              onValueChange={setOpacityRange}
-              min={0}
-              max={1}
-              step={0.05}
-              className="py-4"
-            />
-          </div>
-
-          {/* Opacity Levels */}
-          <div className="space-y-4">
-            <div className="flex justify-between">
-              <Label>Opacity Levels ({opacitySteps === 0 ? 'Smooth' : opacitySteps})</Label>
-            </div>
-            <Slider
-              value={[opacitySteps]}
-              onValueChange={(vals) => setOpacitySteps(vals[0])}
-              min={0}
-              max={10}
-              step={1}
-            />
-            <p className="text-xs text-muted-foreground">0 for smooth random, 2-10 for discrete levels.</p>
-          </div>
-
-          {/* Duration Range (Speed) */}
-          <div className="space-y-4">
-            <div className="flex justify-between">
-              <Label>Animation Duration (s) ({durationRange[0]} - {durationRange[1]})</Label>
-            </div>
-            <Slider
-              value={durationRange}
-              onValueChange={setDurationRange}
-              min={0.1}
-              max={10}
-              step={0.1}
-              className="py-4"
-            />
-          </div>
-
-          {/* Masking Mode */}
-          <div className="space-y-4 p-4 rounded-lg bg-zinc-50 dark:bg-zinc-800 border">
+        <CardContent className="p-4">
+          <Section title="Image">
+            <Input id="image-upload" type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+            <Button variant="outline" className="w-full" onClick={() => document.getElementById('image-upload')?.click()}>
+              <Upload className="w-4 h-4 mr-2" />
+              {image ? 'Change Image' : 'Upload Image'}
+            </Button>
             <div className="flex items-center justify-between">
-              <Label htmlFor="mask-toggle">Edit Mask (Hide Squares)</Label>
-              <Switch id="mask-toggle" checked={isMaskingMode} onCheckedChange={setIsMaskingMode} />
-            </div>
-            <p className="text-xs text-muted-foreground">
-              When enabled, click on grid squares to turn them off (hide).
-            </p>
-            {maskedIndices.size > 0 && (
-              <Button variant="outline" size="sm" onClick={() => setMaskedIndices(new Set())} className="w-full mt-2">
-                Clear Mask ({maskedIndices.size} hidden)
-              </Button>
-            )}
-          </div>
-
-          {/* Corner Dots */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="dots-toggle">Show Corner Dots</Label>
-              <Switch id="dots-toggle" checked={showDots} onCheckedChange={setShowDots} />
-            </div>
-            {showDots && (
-              <div className="space-y-2">
-                <Label>Dots Color</Label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="color"
-                    value={dotsColor}
-                    onChange={(e) => setDotsColor(e.target.value)}
-                    className="w-10 h-10 rounded border cursor-pointer"
-                  />
-                  <span className="text-sm font-mono text-muted-foreground">{dotsColor}</span>
-                </div>
-                <Label>Dots Size ({dotsSize})</Label>
-                <Slider
-                  value={[dotsSize]}
-                  onValueChange={(vals) => setDotsSize(vals[0])}
-                  min={0.5}
-                  max={5}
-                  step={0.5}
-                />
-              </div>
-            )}
-          </div>
-
-          {/* Image Blend Mode */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="blend-toggle">Multiply Image Mode</Label>
+              <span className="text-sm">Multiply Blend</span>
               <Switch
-                id="blend-toggle"
                 checked={blendMode === 'multiply'}
                 onCheckedChange={(c) => setBlendMode(c ? 'multiply' : 'normal')}
               />
             </div>
-            <p className="text-xs text-muted-foreground">
-              Sets image blend mode to 'multiply'. Effective when overlaying on colors.
-            </p>
-          </div>
+          </Section>
 
-          {/* Color */}
-          <div className="space-y-4">
-            <Label>Grid Color</Label>
-            <div className="flex items-center gap-2">
-              <input
-                type="color"
-                value={gridColor}
-                onChange={(e) => setGridColor(e.target.value)}
-                className="w-10 h-10 rounded border cursor-pointer"
-              />
-              <span className="text-sm font-mono text-muted-foreground">{gridColor}</span>
-            </div>
-          </div>
-
-          {/* Box Stroke */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="stroke-toggle">Show Box Stroke</Label>
-              <Switch id="stroke-toggle" checked={showStroke} onCheckedChange={setShowStroke} />
-            </div>
-            {showStroke && (
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Stroke Color</Label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="color"
-                      value={strokeColor}
-                      onChange={(e) => setStrokeColor(e.target.value)}
-                      className="w-10 h-10 rounded border cursor-pointer"
-                    />
-                    <span className="text-sm font-mono text-muted-foreground">{strokeColor}</span>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>Stroke Width ({strokeWidth}px)</Label>
-                  <Slider
-                    value={[strokeWidth]}
-                    onValueChange={(vals) => setStrokeWidth(vals[0])}
-                    min={0.5}
-                    max={5}
-                    step={0.5}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Stroke Opacity Multiplier ({strokeOpacityMultiplier}x)</Label>
-                  <Slider
-                    value={[strokeOpacityMultiplier]}
-                    onValueChange={(vals) => setStrokeOpacityMultiplier(vals[0])}
-                    min={0.5}
-                    max={3}
-                    step={0.1}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Stroke opacity = fill opacity × multiplier (capped at 1.0)
-                  </p>
-                </div>
+          <Section title="Grid">
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span>Density</span>
+                <span className="text-muted-foreground">{cols} cols</span>
               </div>
-            )}
-          </div>
-
-          {/* Preview Settings */}
-          <div className="space-y-4">
+              <Slider value={gridSize} onValueChange={setGridSize} min={5} max={100} step={1} />
+            </div>
             <div className="flex items-center justify-between">
-              <Label htmlFor="animate-toggle">Preview Animation</Label>
-              <Switch id="animate-toggle" checked={isAnimated} onCheckedChange={setIsAnimated} />
+              <span className="text-sm">Color</span>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={gridColor}
+                  onChange={(e) => setGridColor(e.target.value)}
+                  className="w-8 h-8 rounded border cursor-pointer"
+                />
+                <span className="text-xs font-mono text-muted-foreground">{gridColor}</span>
+              </div>
+            </div>
+          </Section>
+
+          <Section title="Opacity">
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span>Range</span>
+                <span className="text-muted-foreground">{opacityRange[0]} - {opacityRange[1]}</span>
+              </div>
+              <Slider value={opacityRange} onValueChange={setOpacityRange} min={0} max={1} step={0.05} />
+            </div>
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span>Levels</span>
+                <span className="text-muted-foreground">{opacitySteps === 0 ? 'Smooth' : opacitySteps}</span>
+              </div>
+              <Slider value={[opacitySteps]} onValueChange={(vals) => setOpacitySteps(vals[0])} min={0} max={10} step={1} />
+            </div>
+          </Section>
+
+          <Section title="Dots" toggle={{ checked: showDots, onCheckedChange: setShowDots }}>
+            <div className="flex items-center justify-between">
+              <span className="text-sm">Color</span>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={dotsColor}
+                  onChange={(e) => setDotsColor(e.target.value)}
+                  className="w-8 h-8 rounded border cursor-pointer"
+                />
+                <span className="text-xs font-mono text-muted-foreground">{dotsColor}</span>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span>Size</span>
+                <span className="text-muted-foreground">{dotsSize}</span>
+              </div>
+              <Slider value={[dotsSize]} onValueChange={(vals) => setDotsSize(vals[0])} min={0.5} max={5} step={0.5} />
+            </div>
+          </Section>
+
+          <Section title="Stroke" toggle={{ checked: showStroke, onCheckedChange: setShowStroke }} defaultOpen={false}>
+            <div className="flex items-center justify-between">
+              <span className="text-sm">Color</span>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={strokeColor}
+                  onChange={(e) => setStrokeColor(e.target.value)}
+                  className="w-8 h-8 rounded border cursor-pointer"
+                />
+                <span className="text-xs font-mono text-muted-foreground">{strokeColor}</span>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span>Width</span>
+                <span className="text-muted-foreground">{strokeWidth}px</span>
+              </div>
+              <Slider value={[strokeWidth]} onValueChange={(vals) => setStrokeWidth(vals[0])} min={0.5} max={5} step={0.5} />
+            </div>
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span>Opacity Mult</span>
+                <span className="text-muted-foreground">{strokeOpacityMultiplier}x</span>
+              </div>
+              <Slider value={[strokeOpacityMultiplier]} onValueChange={(vals) => setStrokeOpacityMultiplier(vals[0])} min={0.5} max={3} step={0.1} />
+            </div>
+          </Section>
+
+          <Section title="Mask" toggle={{ checked: isMaskingMode, onCheckedChange: setIsMaskingMode }} defaultOpen={false}>
+            <p className="text-xs text-muted-foreground">Click squares to hide them.</p>
+            {maskedIndices.size > 0 && (
+              <Button variant="outline" size="sm" onClick={() => setMaskedIndices(new Set())} className="w-full">
+                Clear ({maskedIndices.size} hidden)
+              </Button>
+            )}
+          </Section>
+
+          <Section title="Animation" toggle={{ checked: isAnimated, onCheckedChange: setIsAnimated }}>
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span>Duration</span>
+                <span className="text-muted-foreground">{durationRange[0]}s - {durationRange[1]}s</span>
+              </div>
+              <Slider value={durationRange} onValueChange={setDurationRange} min={0.1} max={10} step={0.1} />
             </div>
             <Button variant="ghost" size="sm" onClick={() => setSeed(s => s + 1)} className="w-full">
               <RefreshCw className="w-4 h-4 mr-2" />
-              Regenerate Pattern
+              Regenerate
             </Button>
-          </div>
+          </Section>
 
-          {/* Actions */}
-          <div className="pt-4 border-t space-y-3">
+          <Section title="Export">
             <Button className="w-full" onClick={handleExportSVG} disabled={!image}>
               <Download className="w-4 h-4 mr-2" />
               Download SVG
             </Button>
             <div className="grid grid-cols-2 gap-2">
-              <Button variant="secondary" className="w-full" onClick={handleCopyCode} disabled={!image}>
+              <Button variant="secondary" size="sm" onClick={handleCopyCode} disabled={!image}>
                 <Copy className="w-4 h-4 mr-2" />
-                Copy Code
+                Code
               </Button>
-              <Button variant="default" className="w-full" onClick={handleDownloadPackage} disabled={!image}>
+              <Button variant="default" size="sm" onClick={handleDownloadPackage} disabled={!image}>
                 <Package className="w-4 h-4 mr-2" />
-                Download Package
+                Package
               </Button>
             </div>
-          </div>
+          </Section>
 
         </CardContent>
       </Card>
 
       {/* Main Preview Area */}
-      <div className="flex-1 bg-zinc-100 dark:bg-zinc-900 rounded-xl border flex items-center justify-center p-8 overflow-hidden relative">
+      <div className="flex-1 flex items-center justify-center p-8 overflow-hidden relative">
         {!image ? (
           <div className="text-center text-muted-foreground flex flex-col items-center">
             <ImageIcon className="w-16 h-16 mb-4 opacity-20" />
