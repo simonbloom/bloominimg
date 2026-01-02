@@ -612,7 +612,7 @@ Please implement this structure now.
                   <motion.div
                     key={`${cell.id}-${durationRange[0]}-${durationRange[1]}-${isAnimated}`}
                     onClick={() => isMaskingMode && toggleMask(i)}
-                    initial={false}
+                    initial={{ opacity: cell.opacity }}
                     animate={shouldAnimate ? {
                       opacity: [cell.opacity, cell.opacity * 0.5, cell.opacity],
                     } : {
