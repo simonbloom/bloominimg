@@ -253,7 +253,7 @@ export const GridOverlay = () => {
   }, []);
 
   return (
-    <div className="relative w-full h-full max-w-4xl mx-auto overflow-hidden shadow-2xl" style={{ aspectRatio: '${dimensions.width}/${dimensions.height}' }}>
+    <div className="relative w-full h-full max-w-4xl mx-auto overflow-hidden" style={{ aspectRatio: '${dimensions.width}/${dimensions.height}' }}>
       <img 
         src="./background.png" 
         alt="Background" 
@@ -407,8 +407,10 @@ Please implement this structure now.
   return (
     <div className="flex flex-col lg:flex-row h-screen gap-6 p-6">
       {/* Sidebar Controls */}
-      <Card className="w-full lg:w-80 flex-shrink-0 overflow-y-auto">
+      <Card className="w-full lg:w-80 flex-shrink-0 overflow-y-auto py-0">
         <CardContent className="p-4">
+          <h1 className="text-lg font-semibold pb-4">Bloomin-img</h1>
+
           <Section title="Image">
             <Input id="image-upload" type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
             <Button variant="outline" className="w-full" onClick={() => document.getElementById('image-upload')?.click()}>
@@ -566,7 +568,7 @@ Please implement this structure now.
           </div>
         ) : (
           <div
-            className="relative shadow-2xl overflow-hidden"
+            className="relative overflow-hidden"
             style={{
               aspectRatio: `${dimensions.width} / ${dimensions.height}`,
               maxHeight: '100%',
