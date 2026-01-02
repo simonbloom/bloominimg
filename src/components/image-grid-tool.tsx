@@ -253,7 +253,7 @@ export const GridOverlay = () => {
   }, []);
 
   return (
-    <div className="relative w-full h-full max-w-4xl mx-auto overflow-hidden rounded-lg shadow-2xl" style={{ aspectRatio: '${dimensions.width}/${dimensions.height}' }}>
+    <div className="relative w-full h-full max-w-4xl mx-auto overflow-hidden shadow-2xl" style={{ aspectRatio: '${dimensions.width}/${dimensions.height}' }}>
       <img 
         src="./background.png" 
         alt="Background" 
@@ -439,7 +439,7 @@ Please implement this structure now.
                   type="color"
                   value={gridColor}
                   onChange={(e) => setGridColor(e.target.value)}
-                  className="w-8 h-8 rounded border cursor-pointer"
+                  className="w-8 h-8 border cursor-pointer"
                 />
                 <span className="text-xs font-mono text-muted-foreground">{gridColor}</span>
               </div>
@@ -471,7 +471,7 @@ Please implement this structure now.
                   type="color"
                   value={dotsColor}
                   onChange={(e) => setDotsColor(e.target.value)}
-                  className="w-8 h-8 rounded border cursor-pointer"
+                  className="w-8 h-8 border cursor-pointer"
                 />
                 <span className="text-xs font-mono text-muted-foreground">{dotsColor}</span>
               </div>
@@ -493,7 +493,7 @@ Please implement this structure now.
                   type="color"
                   value={strokeColor}
                   onChange={(e) => setStrokeColor(e.target.value)}
-                  className="w-8 h-8 rounded border cursor-pointer"
+                  className="w-8 h-8 border cursor-pointer"
                 />
                 <span className="text-xs font-mono text-muted-foreground">{strokeColor}</span>
               </div>
@@ -566,7 +566,7 @@ Please implement this structure now.
           </div>
         ) : (
           <div
-            className="relative shadow-2xl overflow-hidden rounded-md"
+            className="relative shadow-2xl overflow-hidden"
             style={{
               aspectRatio: `${dimensions.width} / ${dimensions.height}`,
               maxHeight: '100%',
