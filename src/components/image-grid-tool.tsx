@@ -68,24 +68,24 @@ function Section({ title, children, toggle, defaultOpen = true }: SectionProps) 
 export default function ImageGridTool() {
   const [image, setImage] = useState<string | null>(null)
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 })
-  const [gridSize, setGridSize] = useState([10]) // Density (used for both if square)
-  const [opacityRange, setOpacityRange] = useState([0.2, 0.9])
-  const [opacitySteps, setOpacitySteps] = useState(3) // 0 = smooth, >0 = number of levels
-  const [durationRange, setDurationRange] = useState([3.1, 10]) // Min/Max duration in seconds
+  const [gridSize, setGridSize] = useState([33]) // Density (used for both if square)
+  const [opacityRange, setOpacityRange] = useState([0.35, 0.9])
+  const [opacitySteps, setOpacitySteps] = useState(4) // 0 = smooth, >0 = number of levels
+  const [durationRange, setDurationRange] = useState([0.6, 10]) // Min/Max duration in seconds
   const [showDots, setShowDots] = useState(true)
   const [gridColor, setGridColor] = useState('#faf9f7')
   const [dotsColor, setDotsColor] = useState('#c9c9c9')
   const [dotsSize, setDotsSize] = useState(1)
-  const [showStroke, setShowStroke] = useState(false)
-  const [strokeColor, setStrokeColor] = useState('#000000')
-  const [strokeWidth, setStrokeWidth] = useState(1)
+  const [showStroke, setShowStroke] = useState(true)
+  const [strokeColor, setStrokeColor] = useState('#e6e6e6')
+  const [strokeWidth, setStrokeWidth] = useState(0.5)
   const [strokeOpacityMultiplier, setStrokeOpacityMultiplier] = useState(1.5)
 
   // Masking state
   const [maskedIndices, setMaskedIndices] = useState<Set<number>>(new Set())
   const [isMaskingMode, setIsMaskingMode] = useState(false)
 
-  const [isAnimated, setIsAnimated] = useState(false)
+  const [isAnimated, setIsAnimated] = useState(true)
   const [seed, setSeed] = useState(0)
   const [blendMode, setBlendMode] = useState<'normal' | 'multiply'>('multiply')
 
@@ -93,9 +93,9 @@ export default function ImageGridTool() {
     const img = new Image()
     img.onload = () => {
       setDimensions({ width: img.width, height: img.height })
-      setImage('/default-image.png')
+      setImage('/default-image.webp')
     }
-    img.src = '/default-image.png'
+    img.src = '/default-image.webp'
   }, [])
 
   // Calculate rows/cols based on aspect ratio approx, or just strict grid
